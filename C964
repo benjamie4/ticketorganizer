@@ -1,0 +1,250 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
+
+import copy
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+import matplotlib.pyplot as plt
+import seaborn as sns 
+import plotly as py
+import plotly.graph_objs as go
+from sklearn.cluster import KMeans
+import warnings
+import pydotplus
+import imageio
+import qgrid
+from sklearn import tree
+from sklearn.model_selection import train_test_split
+get_ipython().run_line_magic('matplotlib', 'inline')
+from sklearn.tree import DecisionTreeClassifier, export_graphviz
+from scipy import misc
+import io
+import logging
+import os
+warnings.filterwarnings("ignore")
+py.offline.init_notebook_mode(connected = True)
+
+
+# In[2]:
+
+
+logger = logging.getLogger('myapp')
+hdlr = logging.FileHandler('../c964/userlogin.log')
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+hdlr.setFormatter(formatter)
+logger.addHandler(hdlr) 
+logger.setLevel(logging.INFO)
+
+logger.info('User executed file.')
+
+df = pd.read_csv(r'../c964/supportTickets.csv')
+
+df['Satisfaction'].replace(to_replace='0 - Unknown',value=0,inplace=True)
+df['Satisfaction'].replace(to_replace='1 - Unsatisfied',value=1,inplace=True)
+df['Satisfaction'].replace(to_replace='2 - Satisfied',value=2,inplace=True)
+df['Satisfaction'].replace(to_replace='3 - Highly satisfied',value=3,inplace=True)
+
+
+dfgrid = df.copy()
+df.head(5)
+
+
+# In[3]:
+
+
+df.describe()
+
+
+# In[4]:
+
+
+X1 = df[['Satisfaction' , 'daysOpen']].iloc[: , :].values
+inertia = []
+for n in range(1 , 11):
+    algorithm = (KMeans(n_clusters = n ,init='k-means++', n_init = 10 ,max_iter=300, 
+                        tol=0.0001,  random_state= 111  , algorithm='elkan') )
+    algorithm.fit(X1)
+    inertia.append(algorithm.inertia_)
+
+
+# In[5]:
+
+
+train, test  = train_test_split(df, test_size = 0.20)
+
+
+# In[6]:
+
+
+print("Training size: {} ; Test size: {}".format(len(train), len(test)))
+
+
+# In[7]:
+
+
+high_sat = df[df['Satisfaction'] == 3]['daysOpen']
+med_sat = df[df['Satisfaction'] == 2]['daysOpen']
+low_sat = df[df['Satisfaction'] == 1]['daysOpen']
+
+fig = plt.figure(figsize = (12,8))
+plt.title("Satisfaction to Days Open")
+high_sat.hist(alpha = 0.7, bins = 30, label = 'Highly Satisfied')
+med_sat.hist(alpha = 0.7, bins = 30, label = 'Unsatisfied')
+low_sat.hist(alpha = 0.7, bins = 30, label = 'very Unsatisfied')
+plt.legend(loc = "upper right")
+
+
+# In[8]:
+
+
+plt.figure(1 , figsize = (15 ,6))
+plt.plot(np.arange(1 , 11) , inertia , 'o')
+plt.plot(np.arange(1 , 11) , inertia , '-' , alpha = 0.5)
+plt.xlabel('Number of Clusters') , plt.ylabel('Inertia')
+plt.show()
+
+
+# In[9]:
+
+
+algorithm = (KMeans(n_clusters = 4 ,init='k-means++', n_init = 10 ,max_iter=300, 
+                        tol=0.0001,  random_state= 111  , algorithm='elkan') )
+algorithm.fit(X1)
+labels1 = algorithm.labels_
+centroids1 = algorithm.cluster_centers_
+
+
+# In[10]:
+
+
+h = 0.02
+x_min, x_max = X1[:, 0].min() - 1, X1[:, 0].max() + 1
+y_min, y_max = X1[:, 1].min() - 1, X1[:, 1].max() + 1
+xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+Z = algorithm.predict(np.c_[xx.ravel(), yy.ravel()]) 
+
+
+# In[11]:
+
+
+plt.figure(1 , figsize = (15 , 7) )
+plt.clf()
+Z = Z.reshape(xx.shape)
+plt.imshow(Z , interpolation='nearest', 
+           extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+           cmap = plt.cm.Pastel2, aspect = 'auto', origin='lower')
+
+plt.scatter( x = 'Satisfaction' ,y = 'daysOpen' , data = df , c = labels1 , 
+            s = 200 )
+plt.scatter(x = centroids1[: , 0] , y =  centroids1[: , 1] , s = 300 , c = 'red' , alpha = 0.5)
+plt.ylabel('daysOpen') , plt.xlabel('Satisfaction')
+plt.show()
+
+
+# In[12]:
+
+
+fig, (ax3,ax2) = plt.subplots(1,2, figsize=(10,4))
+
+
+ax3 = sns.distplot(df['daysOpen'], ax=ax3, axlabel="Days open").set_xlim(0,12)
+
+#Correlation Matrix
+corrmat = df.corr()
+ax2 = sns.heatmap(corrmat, vmax=1, square=True, cmap='rainbow').set_title('Correlation Matrix')
+
+
+# In[13]:
+
+
+df_widget = qgrid.show_grid(dfgrid, grid_options={
+    # SlickGrid options
+    'fullWidthRows': True,
+    'syncColumnCellResize': False,
+    'forceFitColumns': True,
+    'defaultColumnWidth': 70,
+    'rowHeight': 25,
+    'enableColumnReorder': False,
+    'enableTextSelectionOnCells': True,
+    'editable': False,
+    'autoEdit': False,
+    'explicitInitialization': True,
+
+    # Qgrid options
+    'maxVisibleRows': 15,
+    'minVisibleRows': 8,
+    'sortable': True,
+    'filterable': True,
+    'highlightSelectedCell': False,
+    'highlightSelectedRow': True},
+    
+    column_options={
+    # SlickGrid column options
+    'defaultSortAsc': True,
+    'maxWidth': 80,
+    'minWidth': 10,
+    'resizable': True,
+    'sortable': True,
+    'toolTip': "",
+    'width': None
+})
+df_widget.layout.width = "755px"
+df_widget.layout.height = "185px"
+df_widget
+
+
+# In[14]:
+
+
+c = DecisionTreeClassifier(min_samples_split = 100)
+
+
+# In[15]:
+
+
+features = ["daysOpen","Satisfaction"]
+
+
+# In[16]:
+
+
+x_train = train[features]
+y_train = train["Satisfaction"]
+
+x_test = test[features]
+y_test = test["Satisfaction"]
+
+
+# In[17]:
+
+
+y_test
+
+
+# In[18]:
+
+
+dt = c.fit(x_train,y_train)
+
+
+# In[19]:
+
+
+def show_tree(tree, features, path):
+    f = io.StringIO()
+    export_graphviz(tree,out_file=f, feature_names=features)
+    pydotplus.graph_from_dot_data(f.getvalue()).write_png(path)
+    img = imageio.imread(path)
+    plt.rcParams["figure.figsize"] = (20,20)
+    plt.imshow(img)
+    
+
+
+# In[20]:
+
+
+show_tree(dt,features,'dec_tree_01.png')
+
